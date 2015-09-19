@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
 
 require "json"
+require "nokogiri"
 require "uri"
 require "open-uri"
-require "nokogiri"
 
 class CardSearchItem
   attr_reader :index, :page, :title, :content, :url
@@ -27,7 +27,7 @@ class CardSearchItem
   end
 
   def to_s
-  "##{@index} p#{@page}: #{@title}\n\t#{@content}\n\t#{@url}"
+  "##{@index} page: #{@page}) #{@title}\n\t#{@content}\n\t#{@url}"
   end
 end
 
@@ -42,9 +42,6 @@ class HtmlCardSearchResponse
   attr_reader :page
   attr_reader :size
 
-  ##
-  # Iterate each item with _block_.
-
   def each_item &block
     items.each { |item| yield item }
   end
@@ -54,7 +51,6 @@ class HtmlCardSearchResponse
   # "Page 2 of about 859,000 results"
   #rs: "About 774,000 results"
   STAT_REGEXP = %r{Page (\d+) of [aA]bout ([\d\,\.]+) results}
-  # PAGE_1_STAT_REGEXP = %r{About ([\d\,\.]+) results}
   attr_reader :total_results
   def initialize(raw_html, options={})
     @details = nil
@@ -69,16 +65,11 @@ class HtmlCardSearchResponse
       center = @doc.search(%Q{//div[@id="center_col"]})
 
       result_stats = center.search(%Q{//div[@id="resultStats"]}).text
-      #puts "rs: #{result_stats.inspect}"
-      @page, @total_results = parse(result_stats, STAT_REGEXP, prefix: "Page 1 of ")
+      @page, @total_results = parse(result_stats, STAT_REGEXP, prepend: "Page 1 of ")
       @page = @page.to_i
-      #puts "p: #{@page.inspect}, t_r: #{@total_results.inspect}"
 
       results = center.search(%Q{//div[@id="search"]/div/ol/li})
       @estimated_count = results.count
-      # Ah, ok:
-      # invalid size, not large but 10
-      # warn("invalid size, not #{@size} but #{@estimated_count}") unless @estimated_count == @size
 
       results.each_with_index do |r, idx|
         result_hash = {}
@@ -116,10 +107,10 @@ class HtmlCardSearchResponse
   end
 
   def parse(string, regexp, options={})
-    prefix = options[:prefix]
+    prepend = options[:prepend]
     matches = string.match(regexp)
-    if !matches && prefix
-      matches = "#{prefix}#{string}".match(regexp)
+    if !matches && prepend
+      matches = "#{prepend}#{string}".match(regexp)
     end
     return matches ? matches.to_a[1..-1] : []
   end
@@ -212,6 +203,10 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
     found = false
     total_results = 0
 
+    # This file is not a cache.
+    # It is simply a log of the current search results
+    # for analysis
+    # It will be overwritten
     File.open(full_file_path, WRITE_MODE) do |file|
       each do |item|
         if item.total_results
@@ -226,7 +221,7 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
       end
     end
 
-    puts found ? "found: #{found} on page #{found.page} out of #{total_results} total results" : "not found in #{total_results} total results"
+    puts found ? "page #{found.page} out of #{total_results} total results found #{found}" : "not found in #{total_results} total results"
     return found
   end
 
@@ -290,20 +285,6 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
       map { |key, value| "#{key}=#{CardSearcher.url_encode(value)}" unless value.nil? }.compact.join("&")
   end
 
-  # curl -A Mozilla 
-  # "https://www.google.com/search
-  # ?q=find+biology+flashcards
-  # &hl=en
-  # &start=10 # page 2
-  # 
-  # https://www.google.com/search
-  # ?q=find+biology+flashcards&
-  # hl=en&
-  # biw=1318&
-  # bih=600&
-  # ei=fJn8VePkGsesogSowLioBg&
-  # start=10
-  # &sa=N
   def get_search_uri_params
     [[:start, offset],
      [:hl, language],
@@ -343,8 +324,8 @@ if __FILE__ == $PROGRAM_NAME
   opt_parser.parse!
 
   action = options.delete(:action)
-  if action
-    CardSearcher.send(action, options)
+  if "run" == action
+    CardSearcher.run(options)
   else
     CardSearcher.usage
   end
