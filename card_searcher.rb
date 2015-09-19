@@ -1,24 +1,28 @@
 #!/usr/bin/env ruby
 
 require "json"
+require "uri"
 require "open-uri"
+require "nokogiri"
 
 class CardSearchItem
   attr_reader :index, :page, :title, :content, :url
-  attr_reader :visible_url
+  attr_reader :visible_url, :total_results
   attr_reader :title_no_formatting, :cache_url, :gsearch_result_class, :unescaped_url, :other_options
   def initialize(item_hash)
-    @index = item_hash.delete('index')
-    @page = item_hash.delete('page')
-    @title = item_hash.delete('title')
-    @content = item_hash.delete('content')
-    @url = item_hash.delete('url')
-    @visible_url = item_hash.delete('visibleUrl')
+    @index = item_hash.delete("index")
+    @page = item_hash.delete("page")
+    @title = item_hash.delete("title")
+    @content = item_hash.delete("content")
+    @url = item_hash.delete("url")
+    @total_results = item_hash.delete("total_results")
 
-    @title_no_formatting = item_hash.delete('titleNoFormatting')
-    @cache_url = item_hash.delete('cacheUrl')
-    @gsearch_result_class = item_hash.delete('GsearchResultClass')
-    @unescaped_url = item_hash.delete('unescapedUrl')
+    @visible_url = item_hash.delete("visibleUrl")
+
+    @title_no_formatting = item_hash.delete("titleNoFormatting")
+    @cache_url = item_hash.delete("cacheUrl")
+    @gsearch_result_class = item_hash.delete("GsearchResultClass")
+    @unescaped_url = item_hash.delete("unescapedUrl")
     @other_options =  item_hash
   end
 
@@ -27,7 +31,7 @@ class CardSearchItem
   end
 end
 
-class CardSearchResponse
+class HtmlCardSearchResponse
   include Enumerable
   attr_reader :status
   attr_reader :details
@@ -38,29 +42,6 @@ class CardSearchResponse
   attr_reader :page
   attr_reader :size
 
-  def initialize hash
-    @page = 0
-    @hash = hash
-    @size = (hash["responseSize"] || :large).to_sym
-    @items = []
-    @status = hash["responseStatus"]
-    @details = hash["responseDetails"]
-    if valid?
-      if hash["responseData"].include? "cursor"
-        @estimated_count = hash["responseData"]["cursor"]["estimatedResultCount"].to_i
-        @page = hash["responseData"]["cursor"]["currentPageIndex"].to_i
-      end
-      @hash["responseData"]["results"].each_with_index do |result, i|
-        # item_class = Google::Search::Item.class_for result["GsearchResultClass"]
-        # "GsearchResultClass"=>"GwebSearch"
-        result["page"] = page
-        result["index"] = 1 + i + CardSearcher.size_for(size) * page
-        # items << result #item_class.new(result)
-        items << CardSearchItem.new(result)
-      end
-    end
-  end
-
   ##
   # Iterate each item with _block_.
 
@@ -69,17 +50,87 @@ class CardSearchResponse
   end
   alias_method :each, :each_item
 
-  ##
-  # Check if the response is valid.
+
+  # "Page 2 of about 859,000 results"
+  #rs: "About 774,000 results"
+  STAT_REGEXP = %r{Page (\d+) of [aA]bout ([\d\,\.]+) results}
+  # PAGE_1_STAT_REGEXP = %r{About ([\d\,\.]+) results}
+  attr_reader :total_results
+  def initialize(raw_html, options={})
+    @details = nil
+    @max_pages = options.delete(:max_pages) || 10
+    @page = 0
+    @status = options.delete(:status)
+    @size = (options.delete(:size) || :large).to_sym
+    @items = []
+    @hash = {}
+    if valid?
+      @doc = Nokogiri::HTML(raw_html)
+      center = @doc.search(%Q{//div[@id="center_col"]})
+
+      result_stats = center.search(%Q{//div[@id="resultStats"]}).text
+      #puts "rs: #{result_stats.inspect}"
+      @page, @total_results = parse(result_stats, STAT_REGEXP, prefix: "Page 1 of ")
+      @page = @page.to_i
+      #puts "p: #{@page.inspect}, t_r: #{@total_results.inspect}"
+
+      results = center.search(%Q{//div[@id="search"]/div/ol/li})
+      @estimated_count = results.count
+      # Ah, ok:
+      # invalid size, not large but 10
+      # warn("invalid size, not #{@size} but #{@estimated_count}") unless @estimated_count == @size
+
+      results.each_with_index do |r, idx|
+        result_hash = {}
+        a_tag = r.search("h3/a").first
+        unbolded_text = a_tag.children.text
+        result_hash["title"] = unbolded_text
+
+        href = a_tag.attributes["href"].value
+        uri = URI.parse(href)
+        result_hash["url"] = uri.query[2..-2]
+
+        uri = URI.parse(result_hash["url"])
+        result_hash["visibleUrl"] = uri.host
+
+        result_hash["content"] =
+          if !r.search(%Q{*[@class="st"]}).first.nil?
+            r.search(%Q{*[@class="st"]}).first.text
+          elsif !r.search(%Q{*[@class="s"]}).first.nil?
+            r.search(%Q{*[@class="s"]}).first.text
+          else
+            warn "unknown content in 'r':\n#{r.to_html}\n\n"
+            "-"
+          end
+
+        result_hash["total_results"] = @total_results
+        if @page
+          result_hash["page"] = @page
+          result_hash["index"] = 1 + idx + @estimated_count * @page
+        else
+          warn "missing page: result_hash: #{result_hash}"
+        end
+        items << CardSearchItem.new(result_hash)
+      end
+    end
+  end
+
+  def parse(string, regexp, options={})
+    prefix = options[:prefix]
+    matches = string.match(regexp)
+    if !matches && prefix
+      matches = "#{prefix}#{string}".match(regexp)
+    end
+    return matches ? matches.to_a[1..-1] : []
+  end
 
   def valid?
-    hash["responseStatus"] == 200
+    @page <= @max_pages && @status == 200
   end
 end
 
 class CardSearcher
-  # URI = "https://www.google.com/search"
-  URI = "http://www.google.com/uds"
+  URI = "http://www.google.com/search"
   FILE_SEPARATOR = "/"
   DEFAULT_FILE_PATH = "."
   DEFAULT_FILE_EXT = "html"
@@ -98,6 +149,8 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
     -q, --query [QUERY]              Query
     -d, --debug                      Debug Mode
     -h, --help                       This help screen
+
+    e.g. #{$PROGRAM_NAME} --debug --run --query="find anatomy flashcards"
     END
   end
 
@@ -115,8 +168,7 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
   end
 
   def self.size_for sym
-    # { small: 4, large: 10}[sym]
-    { small: 4, large: 8, normal: 10}[sym]
+    { small: 4, large: 10}[sym]
   end
 
   def self.json_decode string
@@ -131,10 +183,11 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
 
   attr_reader :sent
   attr_reader :options, :offset, :size, :language, :api_key, :version, :query
-  attr_reader :debug, :user_agent
+  attr_reader :debug, :user_agent, :max_pages
   def initialize options = {}, &block
     @debug = !!options.delete(:debug)
-    @user_agent = options.delete(:user_agent) || 'Mozilla'
+    @max_pages = options.delete(:max_pages) || 10
+    @user_agent = options.delete(:user_agent) || "Mozilla"
     @version = options.delete(:version) || 1.0
     @type = DEFAULT_SEARCH_TYPE
     @offset = options.delete(:offset) || 0
@@ -157,37 +210,28 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
   def run
     log { "searching for #{@query}" }
     found = false
+    total_results = 0
 
     File.open(full_file_path, WRITE_MODE) do |file|
       each do |item|
-        # puts "#{item.inspect}\n"
+        if item.total_results
+          total_results = item.total_results
+        end
+        file.puts "#{item}\n"
         # stop & log when we match on:
         if item.visible_url == @target_site
           found = item
+          break
         end
-        file.puts "#{item}\n"
       end
     end
 
-    puts found ? "found: #{item}" : "not found"
+    puts found ? "found: #{found} on page #{found.page} out of #{total_results} total results" : "not found in #{total_results} total results"
     return found
   end
 
-  def try_upto(max_tries, check_method=:valid?, rest_time=1, &block)
-    return nil unless block_given?
-    tries = max_tries
-
-    result = block.call
-    tries -= 1
-    if tries > 0 && !result.send(check_method)
-      sleep(rest_time)
-      result = try_upto(tries, check_method, rest_time, &block)
-    end
-    result
-  end
-
   def each_item &block
-    response = self.next.response #try_upto(3) { self.next.response }
+    response = self.next.response
     if response && response.valid?
       response.each { |item| yield item }
       each_item(&block)
@@ -201,11 +245,6 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
   end
   alias_method :all, :all_items
 
-  def get_hash(raw=nil)
-    raw ||= get_raw
-    CardSearcher.json_decode raw
-  end
-
   def next
     @offset += CardSearcher.size_for(size) if sent
     self
@@ -213,10 +252,7 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
 
   def get_response
     raw = get_raw
-    hash = get_hash(raw)
-    hash["responseSize"] = size
-    response = CardSearchResponse.new hash
-    response.raw = raw
+    response = HtmlCardSearchResponse.new(raw.read, status: raw.status.first.to_i, size: size, max_pages: max_pages)
     # @each_response.call response if @each_response
     response
   end
@@ -246,13 +282,11 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
     @sent = true
     uri = get_uri
     log { "GET'ng #{uri.inspect}" }
-    open(uri, "User-Agent" => @user_agent).read
+    open(uri, "User-Agent" => @user_agent)
   end
 
   def get_uri
-    URI + "/G#{@type}Search?" +
-       (get_uri_params + options.to_a).
-    #URI + "?" + (get_search_uri_params + options.to_a).
+    URI + "?" + (get_search_uri_params + options.to_a).
       map { |key, value| "#{key}=#{CardSearcher.url_encode(value)}" unless value.nil? }.compact.join("&")
   end
 
@@ -275,21 +309,12 @@ Usage: #{$PROGRAM_NAME} [OPTIONS]...
      [:hl, language],
      [:q, query]]
   end
-
-  def get_uri_params
-    [[:start, offset],
-     [:rsz, size],
-     [:hl, language],
-     [:key, api_key],
-     [:v, version],
-     [:q, query]]
-  end
 end
 
 if __FILE__ == $PROGRAM_NAME
   require "optparse"
 
-  options = {action: "usage", debug: false }
+  options = {action: "usage", debug: false}
   opt_parser = OptionParser.new do |opts|
     opts.banner = "Usage: #{$PROGRAM_NAME} [OPTIONS]..."
 
@@ -311,6 +336,7 @@ if __FILE__ == $PROGRAM_NAME
 
     opts.on_tail("-h", "--help", "This help screen" ) do
       puts opts
+      puts %Q(\n    e.g. #{$PROGRAM_NAME} --debug --run --query="find anatomy flashcards")
       exit
     end
   end
