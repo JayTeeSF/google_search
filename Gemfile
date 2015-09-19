@@ -1,4 +1,7 @@
 source "https://rubygems.org"
 
-gem 'bundler'
-gem 'google-search'
+gem "bundler"
+gem "json"
+gem "nokogiri"
+# deprecated:
+#gem "google-search"
