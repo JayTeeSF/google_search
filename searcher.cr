@@ -138,7 +138,7 @@ class HtmlCardSearchResponse
         elsif s_matches = s_matches(r)
           result_hash["content"] = s_matches[2]
         else
-          puts %{unknown content\n\n}
+          puts %{unknown content on page #{@page.inspect}\n\n}
           result_hash["content"] = "-"
         end
 

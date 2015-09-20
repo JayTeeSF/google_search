@@ -58,7 +58,6 @@ Usage: searcher.cr [OPTIONS]...
 ```
 ↪ ./searcher --debug --max_pages 10 --run --user_agent "Mozilla" --target_site "www.some-company.com" --query="your search terms"
 
-running with: {:debug => true, :action => "run", :user_agent => "Mozilla", :target_site => "www.some-company.com", :query => "your search terms"}
 searching for your search terms
 curl -A  -XGET "http://www.google.com/search?start=0&hl=en&q=your%20search%20terms"
 curl -A  -XGET "http://www.google.com/search?start=10&hl=en&q=your%20search%20terms"
