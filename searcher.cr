@@ -138,7 +138,7 @@ class HtmlCardSearchResponse
         elsif s_matches = s_matches(r)
           result_hash["content"] = s_matches[2]
         else
-          puts %{unknown content on page #{@page.inspect}\n\n}
+          puts %{\tunknown content on page #{@page.inspect}\n\n}
           result_hash["content"] = "-"
         end
 
@@ -323,7 +323,7 @@ class CardSearcher
     end
     File.open(full_file_path, WRITE_MODE) { |file| file.puts item_list.join("\n\n") }
 
-    puts found ? "Out of #{total_results} total results, found #{found.to_s}" : "not found in the first #{@max_pages} pages of the #{total_results} total results"
+    puts found ? "\nOut of #{total_results} total results, found #{found.to_s}" : "\nNot found in the first #{@max_pages} pages of the #{total_results} total results"
     return found
   end
 

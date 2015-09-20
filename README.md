@@ -2,7 +2,15 @@
 (hacked) google SEO-rank searcher
 
 ## Why?
-See where your site's first-page shows-up in results for a particular search
+You have a website
+It has pages
+You want those pages to show-up in search results (preferrably the first
+page)
+
+And you realize the only way to improve something is to first measure
+it.
+
+This program simply helps you see where your site's first-page shows-up in the results for whatever search you specify
 
 ## Woah...
 IANAL, but proceed with caution: use this software at your own risk. Just assume
@@ -43,23 +51,24 @@ Missing hash key: :query (KeyError)
 ```
 ↪ ./searcher --help
 Usage: searcher.cr [OPTIONS]...
-    -r, --run                        Run
-    -u [USER_AGENT], --user_agent [USER_AGENT]User Agent
-    -m [MAX_PAGES], --max_pages [MAX_PAGES]Max Pages
-    -t [TARGET], --target_site [TARGET]Target Site
-    -q [QUERY], --query [QUERY]      Query
-    -d, --debug                      Debug Mode
-    -h, --help                       This help screen
+    -r, --run                                  Run
+    -u [USER_AGENT], --user_agent [USER_AGENT] User Agent
+    -m [MAX_PAGES],  --max_pages [MAX_PAGES]   Max Pages
+    -t [TARGET],     --target_site [TARGET]    Target Site
+    -q [QUERY],      --query [QUERY]           Query
+    -d,              --debug                   Debug Mode
+    -h,              --help                    This help screen
 
     e.g. searcher.cr -d -m 10 -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards"
 ```
 
 #### Run it:
 ```
-↪ ./searcher --debug --max_pages 10 --run --user_agent "Mozilla" --target_site "www.some-company.com" --query="your search terms"
-
+↪ ./searcher --debug --max_pages 10 --run --user_agent "Mozilla" --target_site "www.outofnowhere.net" --query="your search terms"
 searching for your search terms
 curl -A  -XGET "http://www.google.com/search?start=0&hl=en&q=your%20search%20terms"
+	unknown content on page 1
+
 curl -A  -XGET "http://www.google.com/search?start=10&hl=en&q=your%20search%20terms"
 curl -A  -XGET "http://www.google.com/search?start=20&hl=en&q=your%20search%20terms"
 curl -A  -XGET "http://www.google.com/search?start=30&hl=en&q=your%20search%20terms"
@@ -69,8 +78,12 @@ curl -A  -XGET "http://www.google.com/search?start=60&hl=en&q=your%20search%20te
 curl -A  -XGET "http://www.google.com/search?start=70&hl=en&q=your%20search%20terms"
 curl -A  -XGET "http://www.google.com/search?start=80&hl=en&q=your%20search%20terms"
 curl -A  -XGET "http://www.google.com/search?start=90&hl=en&q=your%20search%20terms"
-curl -A  -XGET "http://www.google.com/search?start=100&hl=en&q=your%20search%20terms"
-not found in 3,630,000,000 total results
+
+Out of 3,450,000,000 total results, found #100 page: 10) Out of Nowhere | SELECTING <b>SEARCH TERMS</b>
+	Aside from popularity, having a site FULL of rich text is the MOST IMPORTANT <br>
+thing you can do to ensure the best natural ranking in the <b>search</b> engines for <b>your</b><br>
+&nbsp;...
+	http://www.outofnowhere.net/planning-your-website-selecting-search-terms/&amp;sa=U&amp;ved=0CEcQFjAJOFpqFQoTCKiH9OWthsgCFZYpiAodwJkP6A&amp;usg=AFQjCNHWjRh_YiPEi_hE912MNNGtWUkveQ
 ```
 
 #### Review the results:
