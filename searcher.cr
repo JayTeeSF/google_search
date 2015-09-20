@@ -415,14 +415,14 @@ class CardSearcher
   end
 end
 
-$PROGRAM_NAME ||= __FILE__
+program_name = File.basename(__FILE__, ".*")
 require "option_parser"
 
 
 options = {debug: false} of Symbol => String|Bool|Int32
 
 opt_parser = OptionParser.new do |opts|
-  opts.banner = "Usage: #{$PROGRAM_NAME} [OPTIONS]..."
+  opts.banner = "Usage: #{program_name} [OPTIONS]..."
 
   opts.on("-r", "--run", "Run") do
     options[:action] = "run"
@@ -450,7 +450,7 @@ opt_parser = OptionParser.new do |opts|
 
   opts.on("-h", "--help", "This help screen" ) do
     puts opts
-    puts %{\n    e.g. #{$PROGRAM_NAME} -d -m 10 -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards"}
+    puts %{\n    e.g. #{program_name} -d -m 10 -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards"}
     exit
   end
 end

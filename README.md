@@ -34,7 +34,7 @@ Missing hash key: :query (KeyError)
 #### Check the Help to figure it out:
 ```
 ↪ ./searcher --help
-Usage: /Users/jthomas/dev/google_search/searcher.cr [OPTIONS]...
+Usage: searcher.cr [OPTIONS]...
     -r, --run                        Run
     -u [USER_AGENT], --user_agent [USER_AGENT]User Agent
     -m [MAX_PAGES], --max_pages [MAX_PAGES]Max Pages
@@ -43,7 +43,7 @@ Usage: /Users/jthomas/dev/google_search/searcher.cr [OPTIONS]...
     -d, --debug                      Debug Mode
     -h, --help                       This help screen
 
-    e.g. /Users/jthomas/dev/google_search/searcher.cr -d -m 10 -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards"
+    e.g. searcher.cr -d -m 10 -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards"
 ```
 
 #### Run it:
