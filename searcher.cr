@@ -158,10 +158,10 @@ class HtmlCardSearchResponse
   end
 
   def parse(string, regexp, options={} of Symbol => String)
-    prefix = options[:prefix]
+    prepend = options[:prepend]
     matches = string.match(regexp)
-    if !matches && prefix
-      matches = "#{prefix}#{string}".match(regexp)
+    if !matches && prepend
+      matches = "#{prepend}#{string}".match(regexp)
     end
 
     if matches && (3 >= matches.size)
@@ -466,7 +466,6 @@ missing = mandatory.select{ |param|
 }
 
 if missing.empty?
-  puts "running with: #{options.inspect}"
   options.delete(:action)
   CardSearcher.run(options)
 else

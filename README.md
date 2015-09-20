@@ -15,10 +15,18 @@ it's as likely to melt your machine as it is to do whatever I say below.
 crystal build searcher.cr --release
 ```
 
-#### [Option 2] Download the binary
+#### [Option 2] Download the binary & chmod it...
 ```
-https://github.com/JayTeeSF/google_search/blob/master/searcher?raw=true
+visit: https://github.com/JayTeeSF/google_search/blob/master/searcher?raw=true
+
+In your terminal (after holding-down cmd-spacebar and entering: "terminal")
+cd ~/Downloads      # navigate to where you downloaded it
+chmod +x ./searcher # make it executable
 ```
+
+#### [Option 3] Use the Ruby version of the searcher
+Instead of `./searcher`, as per below, you'll use `ruby ./searcher.rb`
+[setting-up ruby is an exercise for the reader]
 
 ### Action
 
@@ -67,7 +75,7 @@ not found in 3,630,000,000 total results
 ```
 
 #### Review the results:
-At this point you'll also have a file on your filesystem with a log of the results:
+At this point you'll also have a file on your filesystem with a log of the results, e.g.:
 ```
 ↪ more your-search-terms_web.html
 #1 page: 1) Understanding the <b>Search terms</b> report - AdWords Help

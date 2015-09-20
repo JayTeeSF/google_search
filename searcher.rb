@@ -47,8 +47,8 @@ class HtmlCardSearchResponse
   alias_method :each, :each_item
 
 
-  # "Page 2 of about 859,000 results"
-  #rs: "About 774,000 results"
+  # Page 1 says: "About 774,000 results"
+  # Page 2 says: "Page 2 of about 859,000 results"
   STAT_REGEXP = %r{Page (\d+) of [aA]bout ([\d\,\.]+) results}
   attr_reader :total_results
   def initialize(raw_html, options={})
@@ -61,65 +61,77 @@ class HtmlCardSearchResponse
     @items = []
     @hash = {}
     if valid?
-      # TEMPORARY File writing:
-      #full_file_path = CardSearcher.full_file_path("center-raw")
-      #File.open("#{full_file_path}.raw", "w+") { |file| file.puts raw_html }
+      center = raw_html
+      if center_match = raw_html.match(%r{<div[^>]+id="center_col"[^>]*>(.+)}m)
+        center = center_match[1]
+      end
 
-      center = raw_html.match(%r{<div[^>]+id="center_col"[^>]*>(.+)}m)[1]
-      #puts "center: #{center.inspect}"
+      result_stats = center
+      if result_stats_match = center.match(%r{<div[^>]+id="resultStats"[^>]*>([^<]+)<})
+        result_stats = result_stats_match[1]
+      end
 
-      #result_stats = center.search(%Q{//div[@id="resultStats"]}).text
-      result_stats = center.match(%r{<div[^>]+id="resultStats"[^>]*>([^<]+)<})[1]
-      #puts "result_stats: #{result_stats.inspect}"
-      @page, @total_results = parse(result_stats, STAT_REGEXP, prepend: "Page 1 of ")
-      @page = @page.to_i
+      @page = -1
+      @total_results = "unknown"
 
-      # results = center.search(%Q{//div[@id="search"]/div/ol/li})
-      # results_string = center.match(%r{<div[^>]+id="search".+<div[^>]+id="ires".+<ol[^>]*>(.+)</ol}m)[1]
-      results_string = center.match(%r{<div[^>]+id="search"[^>]*>\s*<div[^>]+id="ires"[^>]*>\s*<ol[^>]*>(.+)</ol}m)[1]
-      #puts "results_string: #{results_string.inspect}"
-      # TODO: split the results String into an array
+      matches = result_stats.match(STAT_REGEXP)
+      if !matches
+        matches = "Page 1 of #{result_stats}".match(STAT_REGEXP)
+      end
+
+      if matches && (3 >= matches.size)
+        @page = matches[1].to_i
+        @total_results = matches[2]
+      end
+
+      results_string = center
+      if results_string_match = center.match(%r{<div[^>]+id="search"[^>]*>\s*<div[^>]+id="ires"[^>]*>\s*<ol[^>]*>(.+)</ol}m)
+        results_string = results_string_match[1]
+      end
 
       results = results_string.split(%r{<li[^>]+class="g"[^>]*>}).reject { |entry| entry.nil? || entry.empty? }
-
-      # results = center.match(%r{<div[^>]+id="search".*<div .*<ol/li})
-      @estimated_count = results.count
-
-      #puts "estimated_count: #{@estimated_count.inspect}"
+      _estimated_count = results.size
+      if _estimated_count.is_a?(Numeric)
+        @estimated_count = _estimated_count
+      else
+        @estimated_count = 10
+      end
 
       results.each_with_index do |r, idx|
-        result_hash = {}
-        # a_tag = r.search("h3/a").first
-        # href, title = r.match(%r{<h3 class="r"><a href="/url?q=([^["]+)">(.+?)</a></h3}m).to_a[1..2]
-        href, title = r.match(%r{<h3[^>]+class="r"><a\s+href="([^"]+)"[^>]*>(.+?)</a></h3}m).to_a[1..2]
-        #puts "href=#{href.inspect}, title: #{title.inspect}"
-        #unbolded_text = a_tag.children.text
-        result_hash["title"] = title #unbolded_text
+        result_hash = {} #of String => String|Int32|Nil
+        href = ""
+        title = "unknown title"
+        href_title_match = r.match(%r{<h3[^>]+class="r"><a\s+href="([^"]+)"[^>]*>(.+?)</a></h3}m)
+        if href_title_match && (3 >= href_title_match.size)
+          href = href_title_match[1]
+          title = href_title_match[2]
+        end
+        result_hash["title"] = title
 
-        #href = a_tag.attributes["href"].value
-        uri = URI.parse(href)
-        #puts "uri.query: #{uri.query.inspect}"
-        #puts "uri.query[2..-1: #{uri.query[2..-1].inspect}"
-        result_hash["url"] = uri.query[2..-1]
+        query = URI.parse(href).query
+        if query && (query.size > 2)
+          url = query[2..-1]
+          result_hash["url"] = url
+          new_uri_host = URI.parse(url).host
+          result_hash["visibleUrl"] = new_uri_host
+        end
 
-        uri = URI.parse(result_hash["url"])
-        result_hash["visibleUrl"] = uri.host
-
-        result_hash["content"] =
-          if st_matches(r)
-            st_matches(r).to_a[2]
-          elsif s_matches(r)
-            s_matches(r).to_a[2]
-          else
-            warn %{unknown content in "r":\n#{r.to_html}\n\n}
-            "-"
-          end
+        if st_matches = st_matches(r)
+          result_hash["content"] = st_matches[2]
+        elsif s_matches = s_matches(r)
+          result_hash["content"] = s_matches[2]
+        else
+          puts %{unknown content\n\n}
+          result_hash["content"] = "-"
+        end
 
         result_hash["total_results"] = @total_results
         if @page
           result_hash["page"] = @page
-          result_hash["index"] = 1 + idx + (@estimated_count * (@page - 1))
-          puts %{result_hash["index"] = #{result_hash["index"].inspect}}
+          adjusted_page = @page.to_i - 1
+          adjusted_idx = idx + 1
+          previous_page_count = (@estimated_count || 10) * adjusted_page
+          result_hash["index"] = adjusted_idx + previous_page_count
         else
           warn "missing page: result_hash: #{result_hash}"
         end
@@ -134,7 +146,12 @@ class HtmlCardSearchResponse
     if !matches && prepend
       matches = "#{prepend}#{string}".match(regexp)
     end
-    return matches ? matches.to_a[1..-1] : []
+
+    if matches && (3 >= matches.size)
+      return matches[1..2]
+    else
+      ["-1", "-1"]
+    end
   end
 
   def valid?
@@ -180,7 +197,7 @@ class CardSearcher
   end
 
   def self.slugify(str)
-    str.downcase.strip.tr(" ", "-").gsub(/[^\w-]/, "")
+    str && str.downcase.strip.tr(" ", "-").gsub(/[^\w-]/, "")
   end
 
   def self.size_for sym
@@ -192,6 +209,7 @@ class CardSearcher
   end
 
   def self.url_encode string
+    # CGI.escape(string.to_s)
     string.to_s.gsub(/([^ a-zA-Z0-9_.-]+)/) {
       "%" + $1.unpack("H2" * $1.bytesize).join("%").upcase
     }.tr(" ", "+")
@@ -226,35 +244,40 @@ class CardSearcher
   def run
     log { "searching for #{@query}" }
     found = false
-    total_results = 0
+    total_results = "0"
 
-    # This file is not a cache.
-    # It is simply a log of the current search results
-    # for analysis
-    # It will be overwritten
-    File.open(full_file_path, WRITE_MODE) do |file|
-      each do |item|
-        if item.total_results
-          total_results = item.total_results
-        end
-        file.puts "#{item}\n"
-        # stop & log when we match on:
-        if item.visible_url == @target_site
-          found = item
-          break
-        end
+    item_list = [] #of String
+    each_item do |item|
+      if item.total_results
+        total_results = item.total_results
       end
-    end
 
-    puts found ? "Out of #{total_results} total results, found #{found}" : "not found in #{total_results} total results"
+      if @target_site && item.visible_url == @target_site
+        found = item
+      end
+
+      item_list << item.to_s
+
+      "Return a String"
+    end
+    File.open(full_file_path, WRITE_MODE) { |file| file.puts item_list.join("\n\n") }
+
+    puts found ? "Out of #{total_results} total results, found #{found.to_s}" : "not found in the first #{@max_pages} pages of the #{total_results} total results"
     return found
   end
 
   def each_item &block
     response = self.next.response
+    found = nil
     if response && response.valid?
-      response.each { |item| yield item }
-      each_item(&block)
+      response.each { |item|
+        yield(item)
+        if @target_site && item.visible_url == @target_site
+          found = item
+          return item
+        end
+      }
+      each_item(&block) unless found
     end
   end
   alias_method :each, :each_item
@@ -307,8 +330,17 @@ class CardSearcher
       map { |key, value| "#{key}=#{CardSearcher.url_encode(value)}" unless value.nil? }.compact.join("&")
   end
 
-  def get_search_uri_params
-    [[:start, offset],
+  # curl -A Mozilla 
+  # https://www.google.com/search
+  # ?q=find+biology+flashcards&
+  # hl=en&
+  # biw=1318&
+  # bih=600&
+  # ei=fJn8VePkGsesogSowLioBg&
+  # start=10
+  # &sa=N
+  private def get_search_uri_params
+    [[:start, offset.to_s],
      [:hl, language],
      [:q, query]]
   end
@@ -316,10 +348,12 @@ end
 
 if __FILE__ == $PROGRAM_NAME
   require "optparse"
+  program_name = File.basename(__FILE__, ".*")
+
 
   options = {debug: false}
   opt_parser = OptionParser.new do |opts|
-    opts.banner = "Usage: #{$PROGRAM_NAME} [OPTIONS]..."
+    opts.banner = "Usage: ruby #{program_name}.rb [OPTIONS]..."
 
     opts.on("-r", "--run", "Run") do
       options[:action] = "run"
@@ -329,7 +363,12 @@ if __FILE__ == $PROGRAM_NAME
       options[:user_agent] = u
     end
 
-    opts.on("-t [TARGET]", "--target [TARGET]", "Target Site") do |t|
+    opts.on("-m [MAX_PAGES]", "--max_pages [MAX_PAGES]", "Max Pages") do |m|
+      options[:max_pages] = m.to_i
+    end
+
+
+    opts.on("-t [TARGET]", "--target_site [TARGET]", "Target Site") do |t|
       options[:target_site] = t
     end
 
@@ -343,14 +382,14 @@ if __FILE__ == $PROGRAM_NAME
 
     opts.on_tail("-h", "--help", "This help screen" ) do
       puts opts
-      puts %Q(\n    e.g. #{$PROGRAM_NAME} -d -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards")
+      puts %Q(\n    e.g. ruby #{program_name}.rb -d -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards")
       exit
     end
   end
 
   begin
     opt_parser.parse!
-    mandatory = [:target_site, :query, {action: "run"}]
+    mandatory = [:query, {action: "run"}]
     missing = mandatory.select{ |param|
       if param.respond_to?(:keys)
         param.keys.any? { |key| options[key] != param[key] }
@@ -360,15 +399,16 @@ if __FILE__ == $PROGRAM_NAME
     }
 
     if missing.empty?
+      options.delete(:action)
       CardSearcher.run(options)
     else
-      puts %{Missing options: #{missing.join(", ")}}
-      puts opt_parser
+      warn %{Missing options: #{missing.join(", ")}}
+      warn opt_parser
       exit
     end
   rescue OptionParser::InvalidOption, OptionParser::MissingArgument
-    puts $!.to_s
-    puts opt_parser
+    warn $!.to_s
+    warn opt_parser
     exit
   end
 end
