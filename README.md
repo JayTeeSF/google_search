@@ -1,16 +1,54 @@
+# What?
 (hacked) google SEO-rank searcher
 
-See where your site's first-page shows-up in search results
-DONE:
-  A Ruby Nokogiri-based solution
-  Switch to Regex's (Chomsky who?)
-    Why?  Famous Last Words: "Because we're parsing for simple patterns from pages with a consistent format"
+# Why?
+See where your site's first-page shows-up in results for a particular search
 
-  Generate a binary that anyone (i.e. non-rubyists) can use (the real reason for removing the Nokogiri dependency)
+# Woah...
+IANAL, but proceed with caution: use this software at your own risk. Just assume
+it's as likely to melt your machine as it is to do whatever I say below.
 
+# Setup
+
+### [Option 1] Build the binary (i.e. from this source)
 ```
 crystal build searcher.cr --release
-./searcher --debug --max_pages 10 --run --user_agent "Mozilla" --target_site "www.some-company.com" --query="your search terms"
+```
+
+### [Option 2] Download the binary
+```
+https://github.com/JayTeeSF/google_search/blob/master/searcher?raw=true
+```
+
+## Action
+
+### Without any options it fails due to any missing required-param(s):
+```
+↪ ./searcher
+Missing hash key: :query (KeyError)
+[4341694773] *Hash(Symbol, String | Int32 | Bool)@Hash(K, V)#[]<Hash(Symbol, String | Int32 | Bool), Symbol>:(String | Int32 | Bool) +773
+[4341637680] __crystal_main +10112
+[4341672635] main +43
+```
+
+### Check the Help to figure it out:
+```
+↪ ./searcher --help
+Usage: /Users/jthomas/dev/google_search/searcher.cr [OPTIONS]...
+    -r, --run                        Run
+    -u [USER_AGENT], --user_agent [USER_AGENT]User Agent
+    -m [MAX_PAGES], --max_pages [MAX_PAGES]Max Pages
+    -t [TARGET], --target_site [TARGET]Target Site
+    -q [QUERY], --query [QUERY]      Query
+    -d, --debug                      Debug Mode
+    -h, --help                       This help screen
+
+    e.g. /Users/jthomas/dev/google_search/searcher.cr -d -m 10 -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards"
+```
+
+### Run it:
+```
+↪ ./searcher --debug --max_pages 10 --run --user_agent "Mozilla" --target_site "www.some-company.com" --query="your search terms"
 
 running with: {:debug => true, :action => "run", :user_agent => "Mozilla", :target_site => "www.some-company.com", :query => "your search terms"}
 searching for your search terms
@@ -27,3 +65,24 @@ curl -A  -XGET "http://www.google.com/search?start=90&hl=en&q=your%20search%20te
 curl -A  -XGET "http://www.google.com/search?start=100&hl=en&q=your%20search%20terms"
 not found in 3,630,000,000 total results
 ```
+
+### Review the results:
+At this point you'll also have a file on your filesystem with a log of the results:
+```
+↪ more your-search-terms_web.html
+#1 page: 1) Understanding the <b>Search terms</b> report - AdWords Help
+        Use the <b>Search terms</b> report to see how <b>your</b> ads performed when triggered by <br>
+actual <b>searches</b> within the <b>Search</b> Network. Identify new <b>search terms</b> with high&nbsp;...
+        https://support.google.com/adwords/answer/2472708%3Fhl%3Den&amp;sa=U&amp;ved=0CBQQFjAAahUKEwj_qOOjmobIAhVWNogKHeQNAdE&amp;usg=AFQjCNFHR_hKoraCdnZSUcv1YXg49Fhimw
+
+#2 page: 1) <b>Search terms</b> report - AdWords Help - the Google Help Center
+        A list of <b>search terms</b> that people have used before seeing <b>your</b> ad and clicking it. <br>
+....
+```
+
+## TO-DONE:
+  A Ruby Nokogiri-based solution
+  Switch to Regex's (Chomsky who?)
+    Why?  Famous Last Words: "Because we're parsing for simple patterns from pages with a consistent format"
+
+  Generate a binary that anyone (i.e. non-rubyists) can use (the real reason for removing the Nokogiri dependency)

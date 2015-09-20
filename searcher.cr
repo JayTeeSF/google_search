@@ -321,7 +321,7 @@ class CardSearcher
 
       "Return a String"
     end
-    File.open(full_file_path, WRITE_MODE) { |file| file.puts item_list.join("\n") }
+    File.open(full_file_path, WRITE_MODE) { |file| file.puts item_list.join("\n\n") }
 
     puts found ? "Out of #{total_results} total results, found #{found.to_s}" : "not found in the first #{@max_pages} pages of the #{total_results} total results"
     return found
