@@ -1,28 +1,28 @@
-# What?
+## What?
 (hacked) google SEO-rank searcher
 
-# Why?
+## Why?
 See where your site's first-page shows-up in results for a particular search
 
-# Woah...
+## Woah...
 IANAL, but proceed with caution: use this software at your own risk. Just assume
 it's as likely to melt your machine as it is to do whatever I say below.
 
 # Setup
 
-### [Option 1] Build the binary (i.e. from this source)
+#### [Option 1] Build the binary (i.e. from this source)
 ```
 crystal build searcher.cr --release
 ```
 
-### [Option 2] Download the binary
+#### [Option 2] Download the binary
 ```
 https://github.com/JayTeeSF/google_search/blob/master/searcher?raw=true
 ```
 
-## Action
+### Action
 
-### Without any options it fails due to any missing required-param(s):
+#### Without any options it fails due to any missing required-param(s):
 ```
 ↪ ./searcher
 Missing hash key: :query (KeyError)
@@ -31,7 +31,7 @@ Missing hash key: :query (KeyError)
 [4341672635] main +43
 ```
 
-### Check the Help to figure it out:
+#### Check the Help to figure it out:
 ```
 ↪ ./searcher --help
 Usage: /Users/jthomas/dev/google_search/searcher.cr [OPTIONS]...
@@ -46,7 +46,7 @@ Usage: /Users/jthomas/dev/google_search/searcher.cr [OPTIONS]...
     e.g. /Users/jthomas/dev/google_search/searcher.cr -d -m 10 -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards"
 ```
 
-### Run it:
+#### Run it:
 ```
 ↪ ./searcher --debug --max_pages 10 --run --user_agent "Mozilla" --target_site "www.some-company.com" --query="your search terms"
 
@@ -66,7 +66,7 @@ curl -A  -XGET "http://www.google.com/search?start=100&hl=en&q=your%20search%20t
 not found in 3,630,000,000 total results
 ```
 
-### Review the results:
+#### Review the results:
 At this point you'll also have a file on your filesystem with a log of the results:
 ```
 ↪ more your-search-terms_web.html
@@ -80,7 +80,7 @@ actual <b>searches</b> within the <b>Search</b> Network. Identify new <b>search 
 ....
 ```
 
-## TO-DONE:
+### TO-DONE:
   A Ruby Nokogiri-based solution
   Switch to Regex's (Chomsky who?)
     Why?  Famous Last Words: "Because we're parsing for simple patterns from pages with a consistent format"
