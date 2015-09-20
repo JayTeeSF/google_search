@@ -18,12 +18,7 @@ it's as likely to melt your machine as it is to do whatever I say below.
 
 # Setup
 
-#### [Option 1] Build the binary (i.e. from this source)
-```
-crystal build searcher.cr --release
-```
-
-#### [Option 2] Download the binary & chmod it...
+#### [Option 1] Download the binary, chmod it, and use it
 ```
 visit: https://github.com/JayTeeSF/google_search/blob/master/searcher?raw=true
 
@@ -32,13 +27,19 @@ cd ~/Downloads      # navigate to where you downloaded it
 chmod +x ./searcher # make it executable
 ```
 
+#### [Option 2] Build the binary (i.e. from this source)
+[We'll assume you can figure-out how to download the files from this repository]
+```
+crystal build searcher.cr --release
+```
+
 #### [Option 3] Use the Ruby version of the searcher
-Instead of `./searcher`, as per below, you'll use `ruby ./searcher.rb`
-[setting-up ruby is an exercise for the reader]
+[Same assumptions apply, plus setting-up Ruby is on you...]
+Follow the instructions below, but instead of typing `./searcher` you'll type `ruby ./searcher.rb`
 
 ### Action
 
-#### Without any options it fails due to any missing required-param(s):
+#### The binary fails if you don't supply all of the required-param(s):
 ```
 ↪ ./searcher
 Missing hash key: :query (KeyError)
@@ -62,7 +63,7 @@ Usage: searcher.cr [OPTIONS]...
     e.g. searcher.cr -d -m 10 -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards"
 ```
 
-#### Run it:
+#### Try it:
 ```
 ↪ ./searcher --debug --max_pages 10 --run --user_agent "Mozilla" --target_site "www.outofnowhere.net" --query="your search terms"
 searching for your search terms
