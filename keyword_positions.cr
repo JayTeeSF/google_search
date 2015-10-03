@@ -246,7 +246,7 @@ class CardSearcher
   end
 
   def self.size_for sym
-    { small: 4, large: 10}[sym]
+    { small: 4, large: 8}[sym]
   end
 
   def self.json_decode string
