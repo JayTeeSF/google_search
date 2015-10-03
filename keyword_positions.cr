@@ -31,7 +31,6 @@ class CardSearchItem
   end
 
   def to_s
-    # "##{@index} page: #{@page}) #{@title}\n\t#{@content}\n\t#{@url}"
     "#{@url} at position: #{@index} on page: #{@page}\n\t\t#{@title}\n\t\t#{@content}"
   end
 end
@@ -167,8 +166,13 @@ class QueryAndPath
 end
 
 class CardSearcher
-  # URI = "http://www.google.com/search"
+  MANUAL_URI = "http://www.google.com/search"
   URI = "http://www.google.com/uds/GwebSearch"
+  DEFAULT_FILE_PATH = "."
+  DEFAULT_FILE_EXT = "html"
+  FILE_PATTERN = "%s.%s"
+  FULL_FILE_PATH_PATTERN = "%s%s%s"
+  FILE_SEPARATOR = "/"
   WRITE_MODE = "w+"
 
   include Enumerable(CardSearchResponse)
@@ -187,7 +191,6 @@ class CardSearcher
   end
 
   def self.search_paths(config_path)
-    # SEARCH_PATHS
     text = File.read(config_path.to_s)
     ary = json_decode(text)
     if ary.is_a?(Array)
@@ -203,7 +206,6 @@ class CardSearcher
     config_path = options[:config] || "./search_config.json"
     messages = [] of String
     search_paths(config_path).each do |search_path_hash|
-      #params = options.merge(search_path_hash)
       params = options.dup
       params[:query] = search_path_hash[:query]
       params[:target_path] = search_path_hash[:target_path]
@@ -220,6 +222,22 @@ class CardSearcher
 
   def self.run(options = {} of Symbol => String|Bool)
     new(options).run
+  end
+
+  def self.full_file_path(slug)
+    file_path = DEFAULT_FILE_PATH
+    file_ext = DEFAULT_FILE_EXT
+    file_name = FILE_PATTERN % [slug, file_ext]
+    FULL_FILE_PATH_PATTERN % [file_path, FILE_SEPARATOR, file_name]
+  end
+
+  def self.unique_slug_for(ary)
+    str = ary.sort.join(" ")
+    slugify(str)
+  end
+
+  def self.slugify(str)
+    str && str.downcase.strip.tr(" ", "-").gsub(/[^\w-]/, "")
   end
 
   def self.size_for sym
@@ -241,12 +259,7 @@ class CardSearcher
     @debug = !!options.delete(:debug)
     @messages = [] of String
 
-    max_pages = options.delete(:max_pages)
-    if max_pages.is_a?(String)
-      @max_pages = max_pages
-    else
-      @max_pages = "few"
-    end
+    @max_pages = "few"
 
     user_agent = options.delete(:user_agent)
     if user_agent.is_a?(String)
@@ -293,12 +306,12 @@ class CardSearcher
 
     target_path = options.delete(:target_path)
     if target_path.is_a?(String)
-      @target_path = target_path
+      @target_path = target_path.to_s.strip
     end
 
     target_domain = options.delete(:target_domain)
     if target_domain.is_a?(String)
-      @target_domain = target_domain
+      @target_domain = target_domain.to_s.sub(/\/\s*$/,"") # remove any trailing spaces/white-space
     end
 
     api_key = options.delete(:api_key)
@@ -308,6 +321,13 @@ class CardSearcher
       @api_key = :notsupplied
     end
     @options = options
+  end
+
+  def slug
+    unless @slug
+      @slug = "#{CardSearcher.slugify(@query)}_results"
+    end
+    @slug
   end
 
   def run
@@ -326,10 +346,10 @@ class CardSearcher
         total_results = item.total_results
       end
 
-      # log { "\trun) visible_url vs target_domain (#{item.visible_url.inspect} <=> #{@target_domain.inspect})" }
-      # log { "\trun) url vs target_path (#{item.url.inspect} <=> #{@target_path.inspect})" }
-      # if (@target_url && item.url == @target_url) || ((item.visible_url.is_a?(String) && @target_domain.is_a?(String) && item.visible_url.to_s.ends_with?(@target_domain.to_s)) && (item.url.is_a?(String) && @target_path.is_a?(String) && item.url.to_s.ends_with?(@target_path.to_s)))
-      if (item.visible_url.is_a?(String) && @target_domain.is_a?(String) && item.visible_url.to_s.ends_with?(@target_domain.to_s))
+      visible_url = (item.visible_url || "").to_s.sub(/\/\s*$/,"") # remove any trailing spaces/white-space
+      url         = (item.url         || "").to_s.strip
+
+      if (visible_url.is_a?(String) && @target_domain.is_a?(String) && visible_url.to_s.ends_with?(@target_domain.to_s))
         if (item.url.is_a?(String) && @target_path.is_a?(String) && item.url.to_s.ends_with?(@target_path.to_s))
           found = item
         else
@@ -341,11 +361,11 @@ class CardSearcher
 
       "Return a String"
     end
-    # File.open(full_file_path, WRITE_MODE) { |file| file.puts item_list.join("\n\n") }
+    File.open(full_file_path, WRITE_MODE) { |file| file.puts item_list.join("\n\n") } if debug
 
-    tee found ? "\tFound #{found.to_s} in #{total_results} total results" : %(\tUnable to find: #{@target_domain}#{@target_path} in #{total_results} total results.\n\tIn your terminal, enter:\n\t\topen "http://www.google.com/search?start=0&q=#{@query}")
+    tee found ? "\tFound #{found.to_s} in #{total_results} total results" : %(\tUnable to find: #{@target_domain}#{@target_path} in #{total_results} total results.\n)
+    tee "\tTo manually inspect, enter:\n\t\topen '#{MANUAL_URI}?start=0&q=#{CardSearcher.url_encode(@query)}'"
 
-    #return found
     return @messages
   end
 
@@ -355,8 +375,6 @@ class CardSearcher
     if response && response.valid?
       response.each { |item|
         block.call(item as CardSearchItem)
-        # log { "\tei) visible_url vs target_domain (#{item.visible_url.inspect} <=> #{@target_domain.inspect})" }
-        # log { "\tei) url vs target_path (#{item.url.inspect} <=> #{@target_path.inspect})" }
         if (@target_url && item.url == @target_url) || ((item.visible_url.is_a?(String) && @target_domain.is_a?(String) && item.visible_url.to_s.ends_with?(@target_domain.to_s)) && (item.url.is_a?(String) && @target_path.is_a?(String) && item.url.to_s.ends_with?(@target_path.to_s)))
           found = item
           return item
@@ -384,9 +402,8 @@ class CardSearcher
 
   def get_response
     raw = get_raw
-    json_hash = CardSearcher.json_decode(raw.body) # || {} of Symbol => Int32|String|Symbol|Nil
-    if json_hash.is_a?(Hash) # of Symbol => Int32|String|Symbol|Nil)
-      #options = json_hash.merge({ status: raw.status_code, size: size, max_pages: max_pages})
+    json_hash = CardSearcher.json_decode(raw.body)
+    if json_hash.is_a?(Hash)
       response = CardSearchResponse.new(json_hash)
     end
     response
@@ -396,6 +413,14 @@ class CardSearcher
   end
 
   # private
+
+  private def full_file_path
+    unless @full_file_path
+      @full_file_path = CardSearcher.full_file_path(slug)
+    end
+
+    return @full_file_path || "./some_file.html"
+  end
 
   private def tee(message="")
     puts message
@@ -416,15 +441,14 @@ class CardSearcher
     @user_agent.nil? ? HTTP::Client.get(uri) : HTTP::Client.get(uri, headers)
   end
 
-"http://www.google.com/uds/GwebSearch?start=0&rsz=large&hl=en&key=notsupplied&v=1.0&q=flashcards&filter=1"
-    # URI + "?" + (get_search_uri_params + options.to_a).map do |key_and_value|
   private def get_uri
+    # URI + "?" + (get_search_uri_params + options.to_a).map do |key_and_value|
     URI + "?" + (get_search_uri_params).map do |key_and_value|
       key = key_and_value.first
     value = key_and_value.last
     if value
       if :v == key
-        "#{key}=1.0"
+        "#{key}=1.0" # Sadly, something is converting the float to an Int!!
       else
         "#{key}=#{CardSearcher.url_encode(value)}"
       end
@@ -432,15 +456,6 @@ class CardSearcher
     end.compact.join("&")
   end
 
-  # curl -A Mozilla 
-  # https://www.google.com/search
-  # ?q=find+biology+flashcards&
-  # hl=en&
-  # biw=1318&
-  # bih=600&
-  # ei=fJn8VePkGsesogSowLioBg&
-  # start=10
-  # &sa=N
   private def get_search_uri_params
     [[:start, offset.to_s],
      [:key, @api_key],
@@ -475,10 +490,6 @@ opt_parser = OptionParser.new do |opts|
     options[:user_agent] = u
   end
 
-  opts.on("-m [MAX_PAGES]", "--max_pages [MAX_PAGES]", "Max Pages") do |m|
-    options[:max_pages] = m.to_s #to_i
-  end
-
   opts.on("--target_url [TARGET]", "Target Url") do |u|
     options[:target_url] = u
   end
@@ -501,7 +512,7 @@ opt_parser = OptionParser.new do |opts|
 
   opts.on("-h", "--help", "This help screen" ) do
     puts opts
-    puts %{\n    e.g. #{program_name} -d -m 10 -r -u "Mozilla" -t "www.mycompany.com" --query="find anatomy flashcards"}
+    puts %{\n    e.g. #{program_name} -d -r -u "Mozilla" --target_domain "mycompany.com" --query="find anatomy flashcards"}
     exit
   end
 end
