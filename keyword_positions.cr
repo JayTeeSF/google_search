@@ -1,9 +1,9 @@
-# crystal build bs_monthly_positions.cr --release
+# crystal build keyword_positions.cr --release
 # to encrypt json:
 # gpg --encrypt --recipient "Jonathan Thomas" search_config.json
 # to decrypt json:
 # gpg --decrypt search_config.json.gpg > search_config.json
-# ./bs_monthly_positions --target_domain "brainscape.com" --run_from "./search_config.json"
+# ./keyword_positions --target_domain "brainscape.com" --run_from "./search_config.json"
 
 require "json"
 require "uri"
@@ -183,7 +183,7 @@ class CardSearcher
     month = sprintf("%02d", time.month).to_s
     day = sprintf("%02d", time.day).to_s
 
-    "./bs_monthly_positions_%s_%s_%s.log" % [year, month, day]
+    "./keyword_positions_%s_%s_%s.log" % [year, month, day]
   end
 
   def self.search_paths(config_path)
