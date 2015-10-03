@@ -181,13 +181,16 @@ class CardSearcher
     puts yield
   end
 
-  def self.log_path
+  def self.ymd
     time = Time.now
     year = sprintf("%02d", time.year).to_s
     month = sprintf("%02d", time.month).to_s
     day = sprintf("%02d", time.day).to_s
+    [year, month, day]
+  end
 
-    "./keyword_positions_%s_%s_%s.log" % [year, month, day]
+  def self.csv_path
+    "./keyword_positions_%s_%s_%s.csv" % ymd
   end
 
   def self.search_paths(config_path)
@@ -209,10 +212,12 @@ class CardSearcher
       params = options.dup
       params[:query] = search_path_hash[:query]
       params[:target_path] = search_path_hash[:target_path]
-      messages += run(params)
+      messages << run(params)
     end
 
-    File.open(log_path, WRITE_MODE) do |file|
+    year, month, day = ymd
+    File.open(csv_path, WRITE_MODE) do |file|
+      file.puts "keywords,position on #{year}-#{month}-#{day}" # header
       messages.each do |message|
         file.puts message
       end
@@ -256,9 +261,8 @@ class CardSearcher
   getter :options, :offset, :size, :language, :api_key, :version, :query
   getter :debug, :user_agent, :max_pages
   def initialize(options = {} of Symbol => Nil|Int32|String|Bool|Float32|Symbol)
+    @year, @month, @day = CardSearcher.ymd
     @debug = !!options.delete(:debug)
-    @messages = [] of String
-
     @max_pages = "few"
 
     user_agent = options.delete(:user_agent)
@@ -297,6 +301,8 @@ class CardSearcher
     query = options.delete(:query)
     if query.is_a?(String)
       @query = query
+    else
+      @query = ""
     end
 
     target_url = options.delete(:target_url)
@@ -333,11 +339,12 @@ class CardSearcher
   def run
     if @query.nil? || @query.not_nil!.empty?
       puts "FAIL"
-      return ["no query"]
+      return "Query Missing, Not Found"
     end
 
-    tee "\nSearching for #{@query}"
-    found = false
+    puts "\nSearching for #{@query}"
+    message = @query
+    found = nil
     total_results = "0"
 
     item_list = [] of String
@@ -353,20 +360,26 @@ class CardSearcher
         if (item.url.is_a?(String) && @target_path.is_a?(String) && item.url.to_s.ends_with?(@target_path.to_s))
           found = item
         else
-          tee "\tOther #{item.url.inspect} (not: #{@target_path}) at index: #{item.index.inspect}\n"
+          puts "\tOther #{item.url.inspect} (not: #{@target_path}) at index: #{item.index.inspect}\n"
         end
       end
 
       item_list << item.to_s
 
-      "Return a String"
+      "Return a String From the Block"
     end
     File.open(full_file_path, WRITE_MODE) { |file| file.puts item_list.join("\n\n") } if debug
 
-    tee found ? "\tFound #{found.to_s} in #{total_results} total results" : %(\tUnable to find: #{@target_domain}#{@target_path} in #{total_results} total results.\n)
-    tee "\tTo manually inspect, enter:\n\t\topen '#{MANUAL_URI}?start=0&q=#{CardSearcher.url_encode(@query)}'"
+    if found
+      puts "\tFound #{found.to_s} in #{total_results} total results" 
+      message += ",#{found.not_nil!.index}"
+    else
+      puts %(\tUnable to find: #{@target_domain}#{@target_path} in #{total_results} total results.\n)
+      message += ",Not Found"
+    end
+    puts "\tTo manually inspect, enter:\n\t\topen '#{MANUAL_URI}?start=0&q=#{CardSearcher.url_encode(@query)}'"
 
-    return @messages
+    return message
   end
 
   def each_item(&block : CardSearchItem -> _)
@@ -420,11 +433,6 @@ class CardSearcher
     end
 
     return @full_file_path || "./some_file.html"
-  end
-
-  private def tee(message="")
-    puts message
-    @messages << message
   end
 
   private def log

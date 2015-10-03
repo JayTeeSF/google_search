@@ -2,4 +2,5 @@
 .crystal/*
 *.html
 *.log
+*.csv
 search_config.json
