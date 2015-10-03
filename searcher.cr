@@ -1,5 +1,6 @@
 # crystal build searcher.cr --release
-# ./searcher -d -m 10 -r -u "Mozilla" -t "www.brainscape.com" --query="biology flashcards"
+# ./searcher -d -m 10 -r -u "Mozilla" --target_domain "www.brainscape.com" --query="biology flashcards"
+# ./searcher --user_agent "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) AppleWebKit/601.1.56 (KHTML, like Gecko) Version/9.0 Safari/601.1.56" --run_all --debug
 
 require "json"
 require "uri"
@@ -14,10 +15,10 @@ class CardSearchItem
     @page = item_hash.delete("page")
     @title = item_hash.delete("title")
     @content = item_hash.delete("content")
-    @url = item_hash.delete("url")
+    @url = item_hash.delete("url") || ""
     @total_results = item_hash.delete("total_results")
 
-    @visible_url = item_hash.delete("visibleUrl")
+    @visible_url = item_hash.delete("visibleUrl") || ""
 
     @title_no_formatting = item_hash.delete("titleNoFormatting")
     @cache_url = item_hash.delete("cacheUrl")
@@ -194,8 +195,45 @@ class CardSearcher
   FULL_FILE_PATH_PATTERN = "%s%s%s"
   WRITE_MODE = "w+"
   DEFAULT_SEARCH_TYPE = "web"
+  SEARCH_PATHS = [
+    {target_domain: "brainscape.com", query: "flashcards", target_path: "/"},
+    {target_domain: "brainscape.com", query: "Spanish flashcards", target_path: "/learn/spanish"},
+    {target_domain: "brainscape.com", query: "Learn Anatomy", target_path: "/subjects/anatomy"},
+    {target_domain: "brainscape.com", query: "Learn Biology", target_path: "/subjects/biology"},
+    {target_domain: "brainscape.com", query: "CPA Exam Prep", target_path: "/subjects/cpa"},
+    {target_domain: "brainscape.com", query: "Learn to Speak German", target_path: "/subjects/german"},
+    {target_domain: "brainscape.com", query: "Bible Study", target_path: "/subjects/bible"},
+    {target_domain: "brainscape.com", query: "Bar Exam Prep", target_path: "/subjects/bar-exam"},
+    {target_domain: "brainscape.com", query: "Study Real Estate", target_path: "/subjects/real-estate"},
+    {target_domain: "brainscape.com", query: "NCLEX Prep", target_path: "/subjects/nclex"},
+    {target_domain: "brainscape.com", query: "Series 66 Exam Prep", target_path: "/subjects/series%2066"},
+    {target_domain: "brainscape.com", query: "AP Chemistry Flashcards", target_path: "/subjects/chemistry"},
+    {target_domain: "brainscape.com", query: "AP U.S. History Exam", target_path: "/learn/ap-us-history"},
+    {target_domain: "brainscape.com", query: "GRE Psychology Prep", target_path: "/learn/gre-psychology"},
+    {target_domain: "brainscape.com", query: "GRE Vocabulary Flashcards", target_path: "/learn/gre-vocabulary"},
+    {target_domain: "brainscape.com", query: "MCAT Test Prep", target_path: "/learn/mcat"},
+    {target_domain: "brainscape.com", query: "SAT Prep", target_path:  "/learn/sat-prep"},
+    {target_domain: "brainscape.com", query: "Series 7 Exam", target_path: "/learn/series-7-exam"},
+    {target_domain: "brainscape.com", query: "Learn French", target_path: "/learn/french"},
+    {target_domain: "brainscape.com", query: "Learn Spanish", target_path:  "/learn/spanish"},
+    {target_domain: "brainscape.com", query: "Learn Chinese", target_path: "/learn/chinese-(mandarin)"},
+    {target_domain: "brainscape.com", query: "Bartending Flashcards", target_path: "/learn/bartending"},
+    {target_domain: "brainscape.com", query: "Vocab Builder", target_path: "/learn/vocab-builder"}
+  ]
 
   include Enumerable(HtmlCardSearchResponse)
+
+  def self.log
+    puts yield
+  end
+
+  def self.run_all(options = {} of Symbol => String|Bool)
+    SEARCH_PATHS.each do |search_path_hash|
+      params = options.merge(search_path_hash)
+      # log { "params: #{params.inspect}" }
+      run(params)
+    end
+  end
 
   def self.run(options = {} of Symbol => String|Bool)
     new(options).run
@@ -244,7 +282,7 @@ class CardSearcher
 
     user_agent = options.delete(:user_agent)
     if user_agent.is_a?(String)
-      @user_agent = options.delete(:user_agent)
+      @user_agent = user_agent
     end
     @type = DEFAULT_SEARCH_TYPE
 
@@ -281,9 +319,19 @@ class CardSearcher
       @query = query
     end
 
-    target_site = options.delete(:target_site)
-    if target_site.is_a?(String)
-      @target_site = target_site
+    target_url = options.delete(:target_url)
+    if target_url.is_a?(String)
+      @target_url = target_url
+    end
+
+    target_path = options.delete(:target_path)
+    if target_path.is_a?(String)
+      @target_path = target_path
+    end
+
+    target_domain = options.delete(:target_domain)
+    if target_domain.is_a?(String)
+      @target_domain = target_domain
     end
 
     api_key = options.delete(:api_key)
@@ -313,7 +361,9 @@ class CardSearcher
         total_results = item.total_results
       end
 
-      if @target_site && item.visible_url == @target_site
+      log { "\trun) visible_url vs target_domain (#{item.visible_url.inspect} <=> #{@target_domain.inspect})" }
+      log { "\trun) url vs target_path (#{item.url.inspect} <=> #{@target_path.inspect})" }
+      if (@target_url && item.url == @target_url) || ((item.visible_url.is_a?(String) && @target_domain.is_a?(String) && item.visible_url.to_s.ends_with?(@target_domain.to_s)) && (item.url.is_a?(String) && @target_path.is_a?(String) && item.url.to_s.ends_with?(@target_path.to_s)))
         found = item
       end
 
@@ -333,7 +383,9 @@ class CardSearcher
     if response && response.valid?
       response.each { |item|
         block.call(item as CardSearchItem)
-        if @target_site && item.visible_url == @target_site
+        log { "\tei) visible_url vs target_domain (#{item.visible_url.inspect} <=> #{@target_domain.inspect})" }
+        log { "\tei) url vs target_path (#{item.url.inspect} <=> #{@target_path.inspect})" }
+        if (@target_url && item.url == @target_url) || ((item.visible_url.is_a?(String) && @target_domain.is_a?(String) && item.visible_url.to_s.ends_with?(@target_domain.to_s)) && (item.url.is_a?(String) && @target_path.is_a?(String) && item.url.to_s.ends_with?(@target_path.to_s)))
           found = item
           return item
         end
@@ -379,14 +431,14 @@ class CardSearcher
 
   private def log
     if debug
-      puts(yield)
+      puts yield
     end
   end
 
   private def get_raw
     @sent = true
     uri = get_uri
-    log { "curl -A #{@user_agent} -XGET #{uri.inspect}" }
+    log { "curl -A #{@user_agent.inspect} -XGET #{uri.inspect}" }
     headers = HTTP::Headers { "User-Agent": @user_agent.to_s }
     @user_agent.nil? ? HTTP::Client.get(uri) : HTTP::Client.get(uri, headers)
   end
@@ -410,7 +462,7 @@ class CardSearcher
   # &sa=N
   private def get_search_uri_params
     [[:start, offset.to_s],
-     [:hl, language],
+     #[:hl, language],
      [:q, query]]
   end
 end
@@ -424,6 +476,11 @@ options = {debug: false} of Symbol => String|Bool|Int32
 opt_parser = OptionParser.new do |opts|
   opts.banner = "Usage: #{program_name} [OPTIONS]..."
 
+  opts.on("--run_all", "Run All") do
+    options[:action] = "run_all"
+    options[:query] = ""
+  end
+
   opts.on("-r", "--run", "Run") do
     options[:action] = "run"
   end
@@ -436,8 +493,16 @@ opt_parser = OptionParser.new do |opts|
     options[:max_pages] = m.to_i
   end
 
-  opts.on("-t [TARGET]", "--target_site [TARGET]", "Target Site") do |t|
-    options[:target_site] = t
+  opts.on("--target_url [TARGET]", "Target Url") do |u|
+    options[:target_url] = u
+  end
+
+  opts.on("--target_path [TARGET]", "Target Path") do |p|
+    options[:target_path] = p
+  end
+
+  opts.on("--target_domain [TARGET]", "Target Domain") do |d|
+    options[:target_domain] = d
   end
 
   opts.on("-q [QUERY]", "--query [QUERY]", "Query") do |q|
@@ -456,7 +521,8 @@ opt_parser = OptionParser.new do |opts|
 end
 opt_parser.parse!
 
-mandatory = [:query, {action: "run"}]
+# mandatory = [:query, {action: "run"}]
+mandatory = [:query, :action]
 missing = mandatory.select{ |param|
   if param.is_a?(Hash)
     param.keys.any? { |key| options[key] != param[key] }
@@ -466,8 +532,12 @@ missing = mandatory.select{ |param|
 }
 
 if missing.empty?
-  options.delete(:action)
-  CardSearcher.run(options)
+  action = options.delete(:action)
+  if "run" == action
+    CardSearcher.run(options)
+  elsif "run_all" == action
+    CardSearcher.run_all(options)
+  end
 else
   puts %{Missing options: #{missing.join(", ")}}
   puts opt_parser
