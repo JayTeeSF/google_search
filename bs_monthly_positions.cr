@@ -3,7 +3,7 @@
 # gpg --encrypt --recipient "Jonathan Thomas" search_config.json
 # to decrypt json:
 # gpg --decrypt search_config.json.gpg > search_config.json
-# ./bs_monthly_positions --target_domain "brainscape.com" --run_from "./search_conf.json"
+# ./bs_monthly_positions --target_domain "brainscape.com" --run_from "./search_config.json"
 
 require "json"
 require "uri"
@@ -102,6 +102,7 @@ class CardSearchResponse
   end
 
   def initialize(hash = {} of String => Int32|String|Symbol|Nil)
+    # puts "GOT: #{hash.inspect}"
     @page = 0
     @hash = hash
     @size = :large
@@ -161,7 +162,7 @@ class QueryAndPath
     query: String,
   })
   def to_h
-   {"target_path" => target_path, "query" => query}
+   {target_path: target_path, query: query}
   end
 end
 
@@ -187,7 +188,8 @@ class CardSearcher
 
   def self.search_paths(config_path)
     # SEARCH_PATHS
-    ary = json_decode(File.read(config_path.to_s))
+    text = File.read(config_path.to_s)
+    ary = json_decode(text)
     if ary.is_a?(Array)
       return ary.map do |entry|
         QueryAndPath.from_json(entry.to_json).to_h
@@ -201,7 +203,10 @@ class CardSearcher
     config_path = options[:config] || "./search_config.json"
     messages = [] of String
     search_paths(config_path).each do |search_path_hash|
-      params = options.merge(search_path_hash)
+      #params = options.merge(search_path_hash)
+      params = options.dup
+      params[:query] = search_path_hash[:query]
+      params[:target_path] = search_path_hash[:target_path]
       messages += run(params)
     end
 
@@ -306,6 +311,11 @@ class CardSearcher
   end
 
   def run
+    if @query.nil? || @query.not_nil!.empty?
+      puts "FAIL"
+      return ["no query"]
+    end
+
     tee "\nSearching for #{@query}"
     found = false
     total_results = "0"
