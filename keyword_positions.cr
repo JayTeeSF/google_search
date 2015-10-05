@@ -339,7 +339,7 @@ class CardSearcher
   def run
     if @query.nil? || @query.not_nil!.empty?
       puts "FAIL"
-      return "Query Missing, Not Found"
+      return "Query Missing, N/A"
     end
 
     puts "\nSearching for #{@query}"
